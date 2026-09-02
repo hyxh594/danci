@@ -37,6 +37,8 @@
     const fresh = initialState(); localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh)); return fresh;
   }
   function dateKey(value = new Date()) { const d = value instanceof Date ? value : new Date(value); const month = String(d.getMonth() + 1).padStart(2, "0"); const day = String(d.getDate()).padStart(2, "0"); return `${d.getFullYear()}-${month}-${day}`; }
+  function introducedTodayIds(today = dateKey()) { return state.words.filter((word) => { const progress = progressFor(word.id); if (progress.introducedAt) return dateKey(progress.introducedAt) === today; return progress.status !== "new" && progress.reviewCount === 1 && progress.lastReviewAt && dateKey(progress.lastReviewAt) === today; }).map((word) => word.id); }
+  function introducedTodayCount() { return introducedTodayIds().length; }
   function ensureDailyNewBatch() {
     const today = dateKey();
     const current = state.settings.dailyNewBatch;
@@ -65,10 +67,7 @@
 
     // On first run after upgrading, retain words already introduced today so
     // a restart cannot silently advance to a fresh batch.
-    const learnedToday = state.words.filter((word) => {
-      const progress = progressFor(word.id);
-      return progress.status !== "new" && progress.reviewCount === 1 && progress.lastReviewAt && dateKey(progress.lastReviewAt) === today;
-    }).map((word) => word.id);
+    const learnedToday = introducedTodayIds(today);
     const remaining = Math.max(0, limit - learnedToday.length);
     const fresh = state.words.filter((word) => progressFor(word.id).status === "new" && !learnedToday.includes(word.id)).slice(0, remaining).map((word) => word.id);
     const ids = [...new Set([...learnedToday, ...fresh])];
@@ -81,7 +80,9 @@
     const dailyIds = new Set(dailyBatch.ids || []);
     const due = state.words.filter((w) => { const p = progressFor(w.id); return p.status === "new" || !p.nextReviewAt || p.nextReviewAt <= now(); });
     const known = due.filter((w) => progressFor(w.id).status !== "new").sort((a,b) => progressFor(a.id).nextReviewAt - progressFor(b.id).nextReviewAt);
-    const fresh = due.filter((w) => progressFor(w.id).status === "new" && dailyIds.has(w.id));
+    const limit = Math.max(1, Number(state.settings.dailyNew) || 20);
+    const remaining = Math.max(0, limit - introducedTodayCount());
+    const fresh = due.filter((w) => progressFor(w.id).status === "new" && dailyIds.has(w.id)).slice(0, remaining);
     return [...known, ...fresh];
   }
   function startSession() { queue = dueWords(); queuePosition = 0; currentWord = queue[0] || null; revealed = false; renderCard(); }
@@ -108,7 +109,8 @@
   function review(result) {
     if (!currentWord || !revealed) return;
     const old = progressFor(currentWord.id);
-    const p = { ...old, reviewCount: old.reviewCount + 1, lastResult: result, lastReviewAt: now() };
+    const reviewedAt = now();
+    const p = { ...old, reviewCount: old.reviewCount + 1, lastResult: result, lastReviewAt: reviewedAt, introducedAt: old.introducedAt || (old.status === "new" ? reviewedAt : undefined) };
     if (result === "remembered") {
       p.successCount += 1; p.streak += 1; p.ease = Math.min(2.8, p.ease + 0.08); p.interval = p.interval ? Math.round(p.interval * p.ease) : 1; p.interval = Math.min(p.interval, 60); p.nextReviewAt = now() + p.interval * DAY; p.status = p.streak >= 3 && p.interval >= 14 ? "mastered" : "learning";
     } else {
