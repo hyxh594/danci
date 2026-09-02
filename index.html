@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f8fc" />
+    <title>浮词 · CET-6 背词器</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="compact.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">F</span><div><strong>浮词</strong><small>CET-6 FOCUS</small></div></div>
+        <div class="top-actions">
+          <button id="super-toggle-btn" class="icon-btn mode-btn" title="切换超级悬浮模式" aria-label="切换超级悬浮模式">⤢</button>
+          <label class="quick-opacity" aria-hidden="true"><span>◐</span><input id="quick-opacity" type="range" min="0.65" max="1" step="0.01" tabindex="-1" aria-label="悬浮窗透明度" /></label>
+          <span id="save-indicator" class="save-indicator">已保存</span>
+          <button id="minimize-btn" class="icon-btn" title="隐藏到托盘（可从托盘恢复）" aria-label="隐藏到托盘">×</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="view active" data-view="review">
+          <div class="review-toolbar">
+            <div><span class="eyebrow">今日复习</span><h1 id="review-title">准备开始</h1></div>
+            <div class="progress-wrap"><span id="progress-label">0 / 0</span><div class="progress"><i id="progress-bar"></i></div></div>
+          </div>
+          <article class="word-card" id="word-card">
+            <div class="card-glow"></div>
+            <div class="word-meta"><span id="word-level">CET-6 CORE</span><span id="word-status">新词</span></div>
+            <div class="word-main" id="word-main">点击开始</div>
+            <div class="phonetic" id="word-phonetic">轻量、离线、随时复习</div>
+            <div class="answer" id="word-answer">答案会在这里出现</div>
+            <button id="reveal-btn" class="reveal-btn">显示释义 <span>Space</span></button>
+            <div class="review-actions">
+              <button id="forgot-btn" class="action-btn danger" disabled>没记住 <kbd>1</kbd></button>
+              <button id="remember-btn" class="action-btn success" disabled>记住 <kbd>2</kbd></button>
+            </div>
+            <button id="skip-btn" class="skip-btn">跳过这个词</button>
+          </article>
+          <div class="tip-row"><span>建议先回忆，再显示释义</span><span>快捷键：Space 显示 · 1 忘记 · 2 记住</span></div>
+        </div>
+
+        <div class="view" data-view="library">
+          <div class="page-heading"><div><span class="eyebrow">词库管理</span><h1>六级核心词库</h1></div><div class="heading-actions"><button id="import-btn" class="outline-btn">导入</button><button id="export-btn" class="primary-btn">导出备份</button><input id="import-file" type="file" accept=".json,.csv,.txt" hidden /></div></div>
+          <div class="stats-grid"><div><b id="stat-total">0</b><span>词库总数</span></div><div><b id="stat-learning">0</b><span>学习中</span></div><div><b id="stat-mastered">0</b><span>已掌握</span></div><div><b id="stat-due">0</b><span>待复习</span></div></div>
+          <div class="library-tools"><input id="search-input" placeholder="搜索单词或释义" /><button id="add-word-btn" class="outline-btn">＋ 添加单词</button></div>
+          <div class="table-wrap"><table><thead><tr><th>单词</th><th>释义</th><th>状态</th><th>下次复习</th></tr></thead><tbody id="word-table"></tbody></table></div>
+        </div>
+
+        <div class="view" data-view="settings">
+          <div class="page-heading"><div><span class="eyebrow">偏好设置</span><h1>把复习放进日常</h1></div></div>
+          <div class="settings-list">
+            <label><span><strong>每日新词上限</strong><small>增加只补今天差额；减少从明天生效</small></span><input id="daily-new" type="number" min="1" max="100" /></label>
+            <label><span><strong>悬浮窗透明度</strong><small>调低透明度，让卡片更安静</small></span><input id="opacity-range" type="range" min="0.75" max="1" step="0.01" /></label>
+            <label class="toggle-row"><span><strong>超级悬浮模式</strong><small>只保留单词卡片，窗口更小；右上角 ⤢ 可快速切换</small></span><input id="super-mode" type="checkbox" /></label>
+            <label class="toggle-row"><span><strong>每日提醒</strong><small>打开页面时提示今日待复习数量</small></span><input id="reminder" type="checkbox" /></label>
+          </div>
+          <div class="about-box"><strong>关于词库</strong><p>当前内置 1253 个可离线使用的 CET-6 六级词条。你可以在“词库管理”中导入自己的词库。</p><small>数据写入当前浏览器的本地存储，点击结果会立即保存。</small></div>
+        </div>
+      </section>
+
+      <nav class="bottom-nav"><button class="nav-btn active" data-target="review"><span>◉</span>复习</button><button class="nav-btn" data-target="library"><span>▤</span>词库</button><button class="nav-btn" data-target="settings"><span>⚙</span>设置</button></nav>
+    </main>
+
+    <div class="resize-handle resize-n" data-edge="n" aria-hidden="true"></div>
+    <div class="resize-handle resize-ne" data-edge="ne" aria-hidden="true"></div>
+    <div class="resize-handle resize-e" data-edge="e" aria-hidden="true"></div>
+    <div class="resize-handle resize-se" data-edge="se" aria-hidden="true"></div>
+    <div class="resize-handle resize-s" data-edge="s" aria-hidden="true"></div>
+    <div class="resize-handle resize-sw" data-edge="sw" aria-hidden="true"></div>
+    <div class="resize-handle resize-w" data-edge="w" aria-hidden="true"></div>
+    <div class="resize-handle resize-nw" data-edge="nw" aria-hidden="true"></div>
+
+    <div id="toast" class="toast" role="status"></div>
+    <div id="add-modal" class="modal hidden"><div class="modal-card"><div class="modal-head"><h2>添加单词</h2><button id="close-modal" class="icon-btn">×</button></div><label>单词<input id="new-word" autocomplete="off" placeholder="例如: resilience" /></label><label>释义<input id="new-meaning" autocomplete="off" placeholder="例如: 韧性；恢复力" /></label><div class="modal-actions"><button id="cancel-add" class="outline-btn">取消</button><button id="confirm-add" class="primary-btn">加入词库</button></div></div></div>
+    <script src="data/cet6-core.js"></script>
+    <script src="data/meaning-expansions.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
