@@ -1,5 +1,45 @@
 const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, ipcMain } = require("electron");
 const path = require("node:path");
+const fs = require("node:fs/promises");
+const fsSync = require("node:fs");
+const { pathToFileURL } = require("node:url");
+
+// Keep the source of truth in the project directory. This is deliberately
+// independent of Electron/Chrome LocalStorage so code updates cannot switch
+// the app to another profile and make learning progress appear to vanish.
+const desktopDataDir = __dirname;
+const runtimeDataDir = path.join(desktopDataDir, ".desktop-runtime");
+app.setPath("userData", runtimeDataDir);
+const statePath = path.join(desktopDataDir, "fuci-cet6-state.json");
+const backupPath = path.join(__dirname, "fuci-cet6-backup-latest.json");
+let stateWriteQueue = Promise.resolve();
+
+function readPersistedState() {
+  for (const candidate of [statePath, backupPath]) {
+    try {
+      const raw = fsSync.readFileSync(candidate, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.words) && parsed.words.length) return parsed;
+    } catch {
+      // Try the next known file. A missing main state can safely fall back to
+      // the rolling backup created beside it.
+    }
+  }
+  return null;
+}
+
+function queuePersistedState(state) {
+  if (!state || typeof state !== "object") return;
+  stateWriteQueue = stateWriteQueue
+    .catch(() => {})
+    .then(async () => {
+      const timestamp = new Date().toISOString();
+      const serialized = JSON.stringify({ ...state, savedAt: timestamp, exportedAt: timestamp }, null, 2);
+      await fs.writeFile(statePath, serialized, "utf8");
+      await fs.writeFile(backupPath, serialized, "utf8");
+    })
+    .catch((error) => console.error("自动备份失败:", error.message));
+}
 
 let mainWindow;
 let tray;
@@ -61,15 +101,15 @@ function createWindow() {
   // process on Windows.
   mainWindow.showInactive();
   mainWindow.setTitle("浮词 · CET-6");
-  mainWindow.loadFile(path.join(__dirname, "index.html"));
   mainWindow.once("ready-to-show", () => showWindow());
   // The mode is persisted in the renderer. Read it once after load so a
   // relaunch never reuses the old tall normal-mode window dimensions.
-  mainWindow.webContents.on("did-finish-load", () => {
-    mainWindow.webContents.executeJavaScript(`(() => { try { const settings = JSON.parse(localStorage.getItem("fuci-cet6-state-v1"))?.settings || {}; return { superMode: Boolean(settings.superMode), superSize: settings.superSize || null }; } catch { return { superMode: true, superSize: null }; } })()`, true)
-      .then((settings) => { resizeWindowForMode(Boolean(settings?.superMode), settings?.superSize); showWindow(); })
-      .catch(() => {});
+  mainWindow.webContents.once("did-finish-load", () => {
+    const settings = readPersistedState()?.settings || {};
+    resizeWindowForMode(Boolean(settings.superMode), settings.superSize || null);
+    showWindow();
   });
+  mainWindow.loadURL(pathToFileURL(path.join(__dirname, "index.html")).toString()).catch((error) => console.error("加载桌面页面失败:", error.message));
   mainWindow.on("close", (event) => {
     if (!app.isQuitting) { event.preventDefault(); hideWindow(); }
   });
@@ -83,6 +123,16 @@ ipcMain.on("fuci:set-super-mode", (_event, payload) => {
 
 ipcMain.on("fuci:hide-window", () => {
   hideWindow();
+});
+
+ipcMain.on("fuci:load-state", (event) => {
+  event.returnValue = readPersistedState();
+});
+
+ipcMain.on("fuci:save-state", (_event, payload) => {
+  let state;
+  try { state = typeof payload === "string" ? JSON.parse(payload) : payload; } catch { return; }
+  queuePersistedState(state);
 });
 
 ipcMain.on("fuci:fit-window", (_event, requested) => {
@@ -155,6 +205,11 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    // Materialize the fixed state file before the renderer starts. If an
+    // earlier version only left the rolling backup, promote it once so future
+    // code changes always have a stable source of truth.
+    const persisted = readPersistedState();
+    if (persisted) queuePersistedState(persisted);
     createWindow();
     const trayIcon = nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
     tray = new Tray(trayIcon);

@@ -1,7 +1,6 @@
 const { existsSync, mkdirSync } = require("node:fs");
 const { join } = require("node:path");
 const { spawn } = require("node:child_process");
-const net = require("node:net");
 
 const root = __dirname;
 const electronBinary = join(root, "node_modules", "electron", "dist", "electron.exe");
@@ -13,34 +12,24 @@ if (!existsSync(electronBinary) && existsSync(cachedElectron)) {
   const unzip = spawn("tar.exe", ["-xf", cachedElectron, "-C", join(root, "node_modules", "electron", "dist")], { cwd: root, stdio: "inherit", windowsHide: true });
   unzip.on("exit", (code) => {
     if (code === 0 && existsSync(electronBinary)) launchDesktop();
-    else openBrowser();
+    else fail("Electron 缓存解压失败");
   });
 } else if (existsSync(electronBinary)) {
   launchDesktop();
 } else {
-  fallback();
+  fail("未检测到 Electron 运行时，请先执行 npm install");
 }
 
 function launchDesktop() {
-  const child = spawn(electronBinary, [root, "--disable-gpu", "--in-process-gpu"], { cwd: root, stdio: "inherit", windowsHide: true });
+  // Some Windows installations refuse to launch Electron's renderer under
+  // the sandbox (ERR_FAILED / renderer process launch-failed). This is a
+  // local, single-purpose desktop app, so disable that sandbox to keep the
+  // bundled page reliable.
+  const child = spawn(electronBinary, [root, "--no-sandbox", "--disable-gpu", "--in-process-gpu"], { cwd: root, stdio: "inherit", windowsHide: true });
   child.on("exit", (code) => process.exit(code ?? 0));
 }
 
-function fallback() {
-  console.log("未检测到 Electron 运行时，先启动浏览器版浮词（可直接使用全部功能）。");
-  const probe = net.createConnection({ host: "127.0.0.1", port: 4173 });
-  probe.once("connect", () => {
-    probe.destroy();
-    openBrowser();
-  });
-  probe.once("error", () => {
-    probe.destroy();
-    const server = spawn(process.execPath, [join(root, "server.mjs")], { cwd: root, stdio: "ignore", windowsHide: true, detached: true });
-    server.unref();
-    setTimeout(openBrowser, 250);
-  });
-}
-
-function openBrowser() {
-  spawn("explorer.exe", ["http://127.0.0.1:4173"], { cwd: root, windowsHide: true });
+function fail(message) {
+  console.error(message);
+  process.exitCode = 1;
 }

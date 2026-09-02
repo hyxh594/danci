@@ -5,8 +5,6 @@
   "type": "module",
   "main": "electron-main.cjs",
   "scripts": {
-    "dev": "node server.mjs",
-    "start": "node server.mjs",
     "build:wordbank": "node scripts/build-cet6-core.mjs",
     "desktop": "node desktop-launcher.cjs"
   },

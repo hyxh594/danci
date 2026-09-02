@@ -6,6 +6,7 @@ out/
 release/
 .electron-data/
 .electron-cache/
+.desktop-runtime/
 .cache-cet/
 
 # Logs and runtime files
@@ -19,6 +20,8 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+fuci-cet6-backup-*.json
+fuci-cet6-state.json
 .vscode/
 .idea/
 

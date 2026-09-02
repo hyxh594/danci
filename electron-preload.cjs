@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("fuciDesktop", {
+  loadState: () => ipcRenderer.sendSync("fuci:load-state"),
+  saveState: (state) => ipcRenderer.send("fuci:save-state", JSON.stringify(state)),
   setSuperMode: (enabled, size) => ipcRenderer.send("fuci:set-super-mode", { enabled: Boolean(enabled), size: size || null }),
   hideWindow: () => ipcRenderer.send("fuci:hide-window"),
   fitToContent: (width, height) => ipcRenderer.send("fuci:fit-window", { width, height }),

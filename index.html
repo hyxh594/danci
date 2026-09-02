@@ -26,8 +26,19 @@
             <div><span class="eyebrow">今日复习</span><h1 id="review-title">准备开始</h1></div>
             <div class="progress-wrap"><span id="progress-label">0 / 0</span><div class="progress"><i id="progress-bar"></i></div></div>
           </div>
+          <section class="learning-overview" aria-label="学习概览">
+            <div class="overview-stats">
+              <button type="button" class="overview-stat" data-detail="total"><b id="overview-total">0</b><span>总词数</span></button>
+              <button type="button" class="overview-stat" data-detail="remaining"><b id="overview-remaining">0</b><span>还剩</span></button>
+              <button type="button" class="overview-stat" data-detail="learned-today"><b id="overview-learned-today">0</b><span>今日新学</span></button>
+              <button type="button" class="overview-stat" data-detail="reviewed-today"><b id="overview-reviewed-today">0</b><span>今日复习</span></button>
+            </div>
+            <button type="button" class="overview-plan" data-detail="plan"><span>首轮计划</span><strong id="overview-finish">计算中</strong><small id="overview-plan-detail">按当前每日新词数估算</small></button>
+          </section>
           <article class="word-card" id="word-card">
             <div class="card-glow"></div>
+            <button id="prev-btn" class="word-nav word-nav-prev" type="button" aria-label="上一个单词" title="上一个单词">‹</button>
+            <button id="next-btn" class="word-nav word-nav-next" type="button" aria-label="下一个单词" title="下一个单词">›</button>
             <div class="word-meta"><span id="word-level">CET-6 CORE</span><span id="word-status">新词</span></div>
             <div class="word-main" id="word-main">点击开始</div>
             <div class="phonetic" id="word-phonetic">轻量、离线、随时复习</div>
@@ -43,8 +54,8 @@
         </div>
 
         <div class="view" data-view="library">
-          <div class="page-heading"><div><span class="eyebrow">词库管理</span><h1>六级核心词库</h1></div><div class="heading-actions"><button id="import-btn" class="outline-btn">导入</button><button id="export-btn" class="primary-btn">导出备份</button><input id="import-file" type="file" accept=".json,.csv,.txt" hidden /></div></div>
-          <div class="stats-grid"><div><b id="stat-total">0</b><span>词库总数</span></div><div><b id="stat-learning">0</b><span>学习中</span></div><div><b id="stat-mastered">0</b><span>已掌握</span></div><div><b id="stat-due">0</b><span>待复习</span></div></div>
+          <div class="page-heading"><div><span class="eyebrow">词库管理</span><h1>六级核心词库</h1></div><div class="heading-actions"><button id="import-btn" class="outline-btn">导入词库</button><button id="restore-btn" class="outline-btn">恢复备份</button><button id="export-btn" class="primary-btn">导出备份</button><input id="import-file" type="file" accept=".json,.csv,.txt" hidden /></div></div>
+          <div class="stats-grid"><button type="button" class="library-stat" data-detail="total"><b id="stat-total">0</b><span>词库总数</span></button><button type="button" class="library-stat" data-detail="learning"><b id="stat-learning">0</b><span>学习中</span></button><button type="button" class="library-stat" data-detail="mastered"><b id="stat-mastered">0</b><span>已掌握</span></button><button type="button" class="library-stat" data-detail="due"><b id="stat-due">0</b><span>待复习</span></button></div>
           <div class="library-tools"><input id="search-input" placeholder="搜索单词或释义" /><button id="add-word-btn" class="outline-btn">＋ 添加单词</button></div>
           <div class="table-wrap"><table><thead><tr><th>单词</th><th>释义</th><th>状态</th><th>下次复习</th></tr></thead><tbody id="word-table"></tbody></table></div>
         </div>
@@ -57,7 +68,7 @@
             <label class="toggle-row"><span><strong>超级悬浮模式</strong><small>只保留单词卡片，窗口更小；右上角 ⤢ 可快速切换</small></span><input id="super-mode" type="checkbox" /></label>
             <label class="toggle-row"><span><strong>每日提醒</strong><small>打开页面时提示今日待复习数量</small></span><input id="reminder" type="checkbox" /></label>
           </div>
-          <div class="about-box"><strong>关于词库</strong><p>当前内置 1253 个可离线使用的 CET-6 六级词条。你可以在“词库管理”中导入自己的词库。</p><small>数据写入当前浏览器的本地存储，点击结果会立即保存。</small></div>
+          <div class="about-box"><strong>关于词库</strong><p>当前内置 1253 个可离线使用的 CET-6 六级词条。你可以在“词库管理”中导入自己的词库。</p><small>数据写入桌面端本地存储，点击结果会立即保存，并自动备份到 D:\danci。</small></div>
         </div>
       </section>
 
@@ -74,6 +85,7 @@
     <div class="resize-handle resize-nw" data-edge="nw" aria-hidden="true"></div>
 
     <div id="toast" class="toast" role="status"></div>
+    <div id="detail-modal" class="modal hidden"><div class="modal-card detail-modal-card"><div class="modal-head"><h2 id="detail-title">详情</h2><button id="detail-close" class="icon-btn" type="button" aria-label="关闭详情">×</button></div><p id="detail-summary" class="detail-summary"></p><div id="detail-body" class="detail-list"></div></div></div>
     <div id="add-modal" class="modal hidden"><div class="modal-card"><div class="modal-head"><h2>添加单词</h2><button id="close-modal" class="icon-btn">×</button></div><label>单词<input id="new-word" autocomplete="off" placeholder="例如: resilience" /></label><label>释义<input id="new-meaning" autocomplete="off" placeholder="例如: 韧性；恢复力" /></label><div class="modal-actions"><button id="cancel-add" class="outline-btn">取消</button><button id="confirm-add" class="primary-btn">加入词库</button></div></div></div>
     <script src="data/cet6-core.js"></script>
     <script src="data/meaning-expansions.js"></script>
