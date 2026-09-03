@@ -56,12 +56,12 @@ body.super-float {
 
 body.super-float .app-shell {
   width: 100%;
-  height: 100%;
+  height: auto;
   min-height: 0;
   max-width: none;
   margin: 0;
   display: block;
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
   box-shadow: none;
 }
@@ -80,7 +80,7 @@ body.super-float .save-indicator {
 body.super-float .content,
 body.super-float .view.active {
   width: 100%;
-  height: 100%;
+  height: auto;
   padding: 0;
 }
 
@@ -90,11 +90,17 @@ body.super-float .view:not([data-view="review"]) {
 
 body.super-float .word-card {
   width: 100%;
-  height: 100%;
-  min-height: 176px;
+  height: auto;
+  min-height: 224px;
+  max-height: 360px;
   margin: 0;
-  padding: 40px 10px 8px;
-  border-radius: 18px;
+  padding: 18px 42px 12px;
+  border: 1px solid rgba(220, 226, 241, .95);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, .9);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: 0 18px 42px rgba(69, 79, 117, .14), inset 0 1px 1px rgba(255, 255, 255, .95);
   display: flex;
   overflow: hidden;
   isolation: isolate;
@@ -106,25 +112,25 @@ body.super-float .word-nav {
   /* Keep the arrows beside the compact word/reveal/action cluster. Using a
      capped offset prevents them from drifting into the empty lower half when
      the user temporarily stretches the window vertically. */
-  top: min(50%, 160px);
+  top: clamp(84px, 50%, 144px);
   z-index: 3;
-  width: 24px;
-  height: 38px;
-  margin-top: -19px;
+  width: 28px;
+  height: 56px;
+  margin-top: -28px;
   padding: 0;
-  border: 1px solid rgba(224, 227, 242, .9);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .76);
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .72);
   color: var(--accent);
-  font-size: 28px;
-  line-height: 35px;
-  box-shadow: 0 5px 14px rgba(43, 48, 91, .08);
+  font-size: 36px;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(91, 103, 153, .12), inset 0 0 0 1px rgba(225, 231, 247, .9);
   -webkit-app-region: no-drag;
   display: grid;
   place-items: center;
 }
 
-body.super-float .word-nav:hover { background: var(--accent-soft); }
+body.super-float .word-nav:hover { background: var(--accent-soft); transform: translateY(-1px); }
 body.super-float .word-nav:disabled { opacity: .22; cursor: default; }
 body.super-float .word-nav-prev { left: 5px; }
 body.super-float .word-nav-next { right: 5px; }
@@ -157,8 +163,8 @@ body.super-float .word-meta span:last-child {
 body.super-float .word-main {
   flex: none;
   max-width: 100%;
-  margin-top: 0;
-  font-size: clamp(24px, 8vw, 32px);
+  margin-top: 38px;
+  font-size: clamp(27px, 8vw, 40px);
   line-height: 1.05;
   overflow-wrap: anywhere;
   z-index: 1;
@@ -188,40 +194,42 @@ body.super-float .answer.visible {
 
 body.super-float .reveal-btn {
   flex: none;
-  margin-top: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
+  margin-top: 12px;
+  padding: 8px 15px;
+  border: 1px solid rgba(216, 225, 254, .9);
+  box-shadow: 0 8px 18px rgba(99, 102, 241, .13), inset 0 1px 2px rgba(255, 255, 255, .9);
+  font-size: 13px;
   white-space: nowrap;
   z-index: 1;
 }
 
 body.super-float .review-actions {
   flex: none;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 12px;
   z-index: 1;
 }
 
 body.super-float .action-btn {
-  min-height: 29px;
-  padding: 6px 4px;
-  border-radius: 9px;
-  font-size: 12px;
+  min-height: 36px;
+  padding: 7px 4px;
+  border-radius: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
 /* A single quiet control rail: mode switch and hide-to-tray only. */
 body.super-float .word-card .top-actions {
   position: absolute;
-  top: 6px;
-  right: 7px;
+  top: 8px;
+  right: 8px;
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 2px 3px;
-  border: 1px solid rgba(224, 227, 242, .9);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, .84);
+  padding: 3px 4px;
+  border: 1px solid rgba(224, 227, 242, .95);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .88);
   box-shadow: 0 4px 12px rgba(43, 48, 91, .08);
   z-index: 4;
   -webkit-app-region: no-drag;
@@ -229,14 +237,14 @@ body.super-float .word-card .top-actions {
 
 body.super-float .word-card .top-actions .mode-btn,
 body.super-float .word-card .top-actions #minimize-btn {
-  width: 23px;
-  height: 23px;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border-radius: 7px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
   color: #858ca0;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
 }
 
@@ -253,9 +261,9 @@ body.super-float .word-card .top-actions #minimize-btn:hover {
 /* Progress is part of the card header, opposite CET6 and clear of controls. */
 body.super-float .word-card .progress-wrap {
   position: absolute;
-  top: 9px;
-  right: 67px;
-  min-width: 46px;
+  top: 11px;
+  right: 77px;
+  min-width: 60px;
   margin: 0;
   z-index: 3;
   -webkit-app-region: no-drag;
@@ -265,11 +273,11 @@ body.super-float .word-card .progress-wrap > span {
   display: block;
   margin-bottom: 2px;
   text-align: right;
-  font-size: 8px;
+  font-size: 9px;
 }
 
 body.super-float .word-card .progress {
-  height: 3px;
+  height: 4px;
 }
 
 /* Transparent hit zones make every edge and corner resizable. */

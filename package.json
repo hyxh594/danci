@@ -6,9 +6,36 @@
   "main": "electron-main.cjs",
   "scripts": {
     "build:wordbank": "node scripts/build-cet6-core.mjs",
-    "desktop": "node desktop-launcher.cjs"
+    "desktop": "node desktop-launcher.cjs",
+    "dist:exe": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.fuci.cet6",
+    "productName": "浮词 CET6",
+    "artifactName": "Fuci-CET6-${version}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "index.html",
+      "styles.css",
+      "compact.css",
+      "app.js",
+      "electron-main.cjs",
+      "electron-preload.cjs",
+      "desktop-launcher.cjs",
+      "data/**/*",
+      "!fuci-cet6-state.json",
+      "!fuci-cet6-backup-*.json",
+      "!node_modules/.cache"
+    ],
+    "win": {
+      "target": ["portable"],
+      "signAndEditExecutable": false
+    }
   },
   "devDependencies": {
-    "electron": "^44.1.0"
+    "electron": "^44.1.0",
+    "electron-builder": "^26.15.3"
   }
 }

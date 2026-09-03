@@ -4,28 +4,55 @@ const fs = require("node:fs/promises");
 const fsSync = require("node:fs");
 const { pathToFileURL } = require("node:url");
 
-// Keep the source of truth in the project directory. This is deliberately
-// independent of Electron/Chrome LocalStorage so code updates cannot switch
-// the app to another profile and make learning progress appear to vanish.
-const desktopDataDir = __dirname;
+// Keep exactly one source of truth for both development and packaged builds.
+// The user requested D:\\danci as the single storage directory, so the
+// executable location and code updates can never create another profile.
+const desktopDataDir = "D:\\danci";
+fsSync.mkdirSync(desktopDataDir, { recursive: true });
 const runtimeDataDir = path.join(desktopDataDir, ".desktop-runtime");
 app.setPath("userData", runtimeDataDir);
 const statePath = path.join(desktopDataDir, "fuci-cet6-state.json");
-const backupPath = path.join(__dirname, "fuci-cet6-backup-latest.json");
+const backupPath = path.join(desktopDataDir, "fuci-cet6-backup-latest.json");
+const stateTempPath = `${statePath}.tmp`;
+const backupTempPath = `${backupPath}.tmp`;
 let stateWriteQueue = Promise.resolve();
 
+function isValidPersistedState(parsed) {
+  return Boolean(
+    parsed &&
+    Array.isArray(parsed.words) &&
+    parsed.words.length &&
+    parsed.progress && typeof parsed.progress === "object" && !Array.isArray(parsed.progress) &&
+    Array.isArray(parsed.history) &&
+    parsed.settings && typeof parsed.settings === "object"
+  );
+}
+
 function readPersistedState() {
-  for (const candidate of [statePath, backupPath]) {
+  for (const candidate of [statePath, backupPath, stateTempPath, backupTempPath]) {
     try {
       const raw = fsSync.readFileSync(candidate, "utf8");
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.words) && parsed.words.length) return parsed;
+      if (isValidPersistedState(parsed)) return parsed;
     } catch {
-      // Try the next known file. A missing main state can safely fall back to
-      // the rolling backup created beside it.
+      // Try the next known file. A partial write can safely fall back to the
+      // rolling backup or a completed temporary file.
     }
   }
   return null;
+}
+
+async function writeFileSafely(targetPath, temporaryPath, serialized) {
+  await fs.writeFile(temporaryPath, serialized, "utf8");
+  try {
+    await fs.rename(temporaryPath, targetPath);
+  } catch (error) {
+    // Windows may reject rename when the destination exists. The temporary
+    // file is still complete, so copy it over and clean up afterwards.
+    if (!['EEXIST', 'EPERM', 'ENOTEMPTY'].includes(error?.code)) throw error;
+    await fs.copyFile(temporaryPath, targetPath);
+    await fs.unlink(temporaryPath).catch(() => {});
+  }
 }
 
 function queuePersistedState(state) {
@@ -35,8 +62,8 @@ function queuePersistedState(state) {
     .then(async () => {
       const timestamp = new Date().toISOString();
       const serialized = JSON.stringify({ ...state, savedAt: timestamp, exportedAt: timestamp }, null, 2);
-      await fs.writeFile(statePath, serialized, "utf8");
-      await fs.writeFile(backupPath, serialized, "utf8");
+      await writeFileSafely(statePath, stateTempPath, serialized);
+      await writeFileSafely(backupPath, backupTempPath, serialized);
     })
     .catch((error) => console.error("自动备份失败:", error.message));
 }
@@ -81,6 +108,7 @@ function setWindowSize(width, height) {
 }
 
 function createWindow() {
+  const preloadPath = path.join(__dirname, "electron-preload.cjs");
   mainWindow = new BrowserWindow({
     width: 320,
     height: 190,
@@ -94,8 +122,11 @@ function createWindow() {
     alwaysOnTop: true,
     show: true,
     backgroundColor: "#f6f7fb",
-    preload: path.join(__dirname, "electron-preload.cjs"),
-    webPreferences: { contextIsolation: true, nodeIntegration: false, spellcheck: false }
+    preload: preloadPath,
+    // This is a local file-only desktop app. Keep the preload bridge on the
+    // page's world so the persistence API is available across Electron 44
+    // portable/dev launches as well as packaged launches.
+    webPreferences: { contextIsolation: false, nodeIntegration: true, sandbox: false, spellcheck: false }
   });
   // Explicitly show on launch as the app may be started from a hidden tray
   // process on Windows.
@@ -127,6 +158,11 @@ ipcMain.on("fuci:hide-window", () => {
 
 ipcMain.on("fuci:load-state", (event) => {
   event.returnValue = readPersistedState();
+});
+
+ipcMain.on("fuci:state-status", (event) => {
+  const exists = [statePath, backupPath, stateTempPath, backupTempPath].some((candidate) => fsSync.existsSync(candidate));
+  event.returnValue = { exists, readable: Boolean(readPersistedState()) };
 });
 
 ipcMain.on("fuci:save-state", (_event, payload) => {
@@ -205,11 +241,9 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
-    // Materialize the fixed state file before the renderer starts. If an
-    // earlier version only left the rolling backup, promote it once so future
-    // code changes always have a stable source of truth.
-    const persisted = readPersistedState();
-    if (persisted) queuePersistedState(persisted);
+    // Do not asynchronously rewrite the state file before the renderer reads
+    // it. That used to create a startup race where the renderer saw partial
+    // JSON and immediately replaced valid progress with a fresh state.
     createWindow();
     const trayIcon = nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
     tray = new Tray(trayIcon);

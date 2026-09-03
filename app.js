@@ -1,9 +1,30 @@
 (() => {
+  // Keep a direct fallback for older/portable Electron runtimes where the
+  // preload bridge may not be injected. The app is local-only and runs with
+  // Node integration enabled, so both paths use the same main-process IPC.
+  if (!window.fuciDesktop && typeof window.require === "function") {
+    try {
+      const { ipcRenderer } = window.require("electron");
+      window.fuciDesktop = {
+        loadState: () => ipcRenderer.sendSync("fuci:load-state"),
+        stateStatus: () => ipcRenderer.sendSync("fuci:state-status"),
+        saveState: (state) => ipcRenderer.send("fuci:save-state", JSON.stringify(state)),
+        setSuperMode: (enabled, size) => ipcRenderer.send("fuci:set-super-mode", { enabled: Boolean(enabled), size: size || null }),
+        hideWindow: () => ipcRenderer.send("fuci:hide-window"),
+        fitToContent: (width, height) => ipcRenderer.send("fuci:fit-window", { width, height }),
+        resizeStart: (edge, screenX, screenY) => ipcRenderer.send("fuci:resize-start", { edge, screenX, screenY }),
+        resizeMove: (screenX, screenY) => ipcRenderer.send("fuci:resize-move", { screenX, screenY }),
+        resizeEnd: () => ipcRenderer.send("fuci:resize-end"),
+        onWindowResized: (callback) => ipcRenderer.on("fuci:window-resized", (_event, size) => callback(size))
+      };
+    } catch {}
+  }
   const now = () => Date.now();
   const DAY = 86400000;
   const TEN_MINUTES = 600000;
   const cloneSeed = () => CET6_CORE_WORDS.map((word) => ({ ...word, createdAt: now() }));
   const initialState = () => ({ version: 4, words: cloneSeed(), progress: {}, history: [], settings: { dailyNew: 20, opacity: 1, autoNext: true, reminder: true, superMode: true, superSize: null, dailyNewBatch: null } });
+  let stateLoadStatus = { persisted: false, blocked: false };
   let state = loadState();
   let queue = [];
   let queuePosition = 0;
@@ -16,12 +37,27 @@
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const progressFor = (id) => state.progress[id] || { status: "new", interval: 0, ease: 2.3, streak: 0, reviewCount: 0, successCount: 0, failCount: 0, nextReviewAt: 0, lastResult: "" };
   const meaningFor = (word) => CET6_MEANING_EXPANSIONS[word?.word?.toLowerCase()] || word?.meaning || "暂无释义，请在词库中补充";
-  const save = () => { try { if (window.fuciDesktop?.saveState) window.fuciDesktop.saveState(state); } catch { /* desktop persistence must not block the UI */ } clearTimeout(saveTimer); $("#save-indicator").textContent = "已保存"; };
+  const save = () => {
+    if (stateLoadStatus.blocked) {
+      $("#save-indicator").textContent = "未保存：数据文件异常";
+      return;
+    }
+    try {
+      if (window.fuciDesktop?.saveState) window.fuciDesktop.saveState(state);
+      else return;
+    } catch {
+      $("#save-indicator").textContent = "未保存：桌面端不可用";
+      return;
+    }
+    clearTimeout(saveTimer);
+    $("#save-indicator").textContent = "已保存";
+  };
   const scheduleSave = () => { $("#save-indicator").textContent = "保存中…"; clearTimeout(saveTimer); saveTimer = setTimeout(save, 120); };
   function loadState() {
     try {
       const saved = window.fuciDesktop?.loadState?.() || null;
       if (saved?.words?.length) {
+        stateLoadStatus = { persisted: true, blocked: false };
         const fresh = initialState();
         const migrated = { ...fresh, ...saved, version: 4, words: saved.words, progress: saved.progress || {}, history: saved.history || [], settings: { ...fresh.settings, ...(saved.settings || {}) } };
         if (migrated.settings.superSize && (Number(migrated.settings.superSize.width) < 220 || Number(migrated.settings.superSize.height) < 176)) migrated.settings.superSize = null;
@@ -31,7 +67,13 @@
         migrated.settings.superMode = true;
         return migrated;
       }
-    } catch { /* ignore corrupt local data */ }
+      // An existing but unreadable desktop file must never be silently
+      // replaced by the initial vocabulary on startup.
+      const status = window.fuciDesktop?.stateStatus?.();
+      if (window.fuciDesktop?.loadState && status?.exists) stateLoadStatus = { persisted: false, blocked: true };
+    } catch {
+      if (window.fuciDesktop?.loadState) stateLoadStatus = { persisted: false, blocked: true };
+    }
     return initialState();
   }
   function dateKey(value = new Date()) { const d = value instanceof Date ? value : new Date(value); const month = String(d.getMonth() + 1).padStart(2, "0"); const day = String(d.getDate()).padStart(2, "0"); return `${d.getFullYear()}-${month}-${day}`; }
@@ -259,5 +301,5 @@
     $("#daily-new").value = state.settings.dailyNew; $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; $("#super-mode").checked = Boolean(state.settings.superMode); $("#reminder").checked = state.settings.reminder; $("#daily-new").addEventListener("change", (e) => { state.settings.dailyNew = Math.max(1, Math.min(100, Number(e.target.value) || 20)); save(); startSession(); updateStats(); }); const updateOpacity = (e) => { state.settings.opacity = Number(e.target.value); $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; document.querySelector(".app-shell").style.opacity = state.settings.opacity; save(); }; $("#opacity-range").addEventListener("input", updateOpacity); $("#quick-opacity").addEventListener("input", updateOpacity); $("#super-mode").addEventListener("change", (e) => applySuperMode(e.target.checked)); $("#super-toggle-btn").addEventListener("click", () => applySuperMode(!state.settings.superMode)); $("#minimize-btn").addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (window.fuciDesktop?.hideWindow) window.fuciDesktop.hideWindow(); }); window.fuciDesktop?.onWindowResized?.((size) => { if (!state.settings.superMode || !size) return; const width = Math.round(Number(size.width)); const height = Math.round(Number(size.height)); if (width < 220 || height < 176) return; state.settings.superSize = { width, height }; save(); }); $("#reminder").addEventListener("change", (e) => { state.settings.reminder = e.target.checked; save(); });
     $$(".resize-handle").forEach((handle) => handle.addEventListener("mousedown", (event) => { if (!window.fuciDesktop?.resizeStart) return; event.preventDefault(); const edge = handle.dataset.edge; window.fuciDesktop.resizeStart(edge, event.screenX, event.screenY); const move = (e) => window.fuciDesktop.resizeMove(e.screenX, e.screenY); const end = () => { window.fuciDesktop.resizeEnd(); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", end); }; window.addEventListener("mousemove", move); window.addEventListener("mouseup", end, { once: true }); }));
   }
-  document.querySelector(".app-shell").style.opacity = state.settings.opacity; bind(); applySuperMode(state.settings.superMode, false); startSession(); updateStats(); save(); fitDesktopWindow(); if (state.settings.reminder && dueWords().length) setTimeout(() => toast(`今天有 ${dueWords().length} 个词待复习`), 500);
+  document.querySelector(".app-shell").style.opacity = state.settings.opacity; bind(); applySuperMode(state.settings.superMode, false); startSession(); updateStats(); save(); fitDesktopWindow(); if (stateLoadStatus.blocked) setTimeout(() => toast("数据文件读取失败，原文件未被覆盖，请检查备份"), 400); else if (state.settings.reminder && dueWords().length) setTimeout(() => toast(`今天有 ${dueWords().length} 个词待复习`), 500);
 })();
