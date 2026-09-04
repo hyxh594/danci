@@ -4,6 +4,7 @@ const api = {
   loadState: () => ipcRenderer.sendSync("fuci:load-state"),
   stateStatus: () => ipcRenderer.sendSync("fuci:state-status"),
   saveState: (state) => ipcRenderer.send("fuci:save-state", JSON.stringify(state)),
+  saveStateOnly: (state) => ipcRenderer.send("fuci:save-state-only", JSON.stringify(state)),
   setSuperMode: (enabled, size) => ipcRenderer.send("fuci:set-super-mode", { enabled: Boolean(enabled), size: size || null }),
   hideWindow: () => ipcRenderer.send("fuci:hide-window"),
   fitToContent: (width, height) => ipcRenderer.send("fuci:fit-window", { width, height }),

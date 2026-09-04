@@ -9,6 +9,7 @@
         loadState: () => ipcRenderer.sendSync("fuci:load-state"),
         stateStatus: () => ipcRenderer.sendSync("fuci:state-status"),
         saveState: (state) => ipcRenderer.send("fuci:save-state", JSON.stringify(state)),
+        saveStateOnly: (state) => ipcRenderer.send("fuci:save-state-only", JSON.stringify(state)),
         setSuperMode: (enabled, size) => ipcRenderer.send("fuci:set-super-mode", { enabled: Boolean(enabled), size: size || null }),
         hideWindow: () => ipcRenderer.send("fuci:hide-window"),
         fitToContent: (width, height) => ipcRenderer.send("fuci:fit-window", { width, height }),
@@ -32,6 +33,7 @@
   let revealed = false;
   let saveTimer;
   let fitTimer;
+  let appStarting = true;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -74,13 +76,14 @@
     utterance.onerror = reset;
     try { synth.speak(utterance); } catch { reset(); toast("朗读启动失败，请检查系统语音设置"); }
   }
-  const save = () => {
+  const save = ({ backup = !appStarting } = {}) => {
     if (stateLoadStatus.blocked) {
       $("#save-indicator").textContent = "未保存：数据文件异常";
       return;
     }
     try {
-      if (window.fuciDesktop?.saveState) window.fuciDesktop.saveState(state);
+      if (!backup && window.fuciDesktop?.saveStateOnly) window.fuciDesktop.saveStateOnly(state);
+      else if (window.fuciDesktop?.saveState) window.fuciDesktop.saveState(state);
       else return;
     } catch {
       $("#save-indicator").textContent = "未保存：桌面端不可用";
@@ -199,7 +202,7 @@
       }
       if (ids.length !== current.ids.length || ids.some((id, index) => id !== current.ids[index])) {
         state.settings.dailyNewBatch = { date: today, ids };
-        save();
+        if (!appStarting) save();
       }
       return state.settings.dailyNewBatch;
     }
@@ -211,7 +214,7 @@
     const fresh = state.words.filter((word) => progressFor(word.id).status === "new" && !learnedToday.includes(word.id)).slice(0, remaining).map((word) => word.id);
     const ids = [...new Set([...learnedToday, ...fresh])];
     state.settings.dailyNewBatch = { date: today, ids };
-    save();
+    if (!appStarting) save();
     return state.settings.dailyNewBatch;
   }
   function dueWords() {
@@ -343,5 +346,5 @@
     $("#daily-new").value = state.settings.dailyNew; $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; $("#super-mode").checked = Boolean(state.settings.superMode); $("#reminder").checked = state.settings.reminder; $("#daily-new").addEventListener("change", (e) => { state.settings.dailyNew = Math.max(1, Math.min(100, Number(e.target.value) || 20)); save(); startSession(); updateStats(); }); const updateOpacity = (e) => { state.settings.opacity = Number(e.target.value); $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; document.querySelector(".app-shell").style.opacity = state.settings.opacity; save(); }; $("#opacity-range").addEventListener("input", updateOpacity); $("#quick-opacity").addEventListener("input", updateOpacity); $("#super-mode").addEventListener("change", (e) => applySuperMode(e.target.checked)); $("#super-toggle-btn").addEventListener("click", () => applySuperMode(!state.settings.superMode)); $("#minimize-btn").addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (window.fuciDesktop?.hideWindow) window.fuciDesktop.hideWindow(); }); window.fuciDesktop?.onWindowResized?.((size) => { if (!state.settings.superMode || !size) return; const width = Math.round(Number(size.width)); const height = Math.round(Number(size.height)); if (width < 220 || height < 176) return; state.settings.superSize = { width, height }; save(); }); $("#reminder").addEventListener("change", (e) => { state.settings.reminder = e.target.checked; save(); });
     $$(".resize-handle").forEach((handle) => handle.addEventListener("mousedown", (event) => { if (!window.fuciDesktop?.resizeStart) return; event.preventDefault(); const edge = handle.dataset.edge; window.fuciDesktop.resizeStart(edge, event.screenX, event.screenY); const move = (e) => window.fuciDesktop.resizeMove(e.screenX, e.screenY); const end = () => { window.fuciDesktop.resizeEnd(); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", end); }; window.addEventListener("mousemove", move); window.addEventListener("mouseup", end, { once: true }); }));
   }
-  document.querySelector(".app-shell").style.opacity = state.settings.opacity; bind(); applySuperMode(state.settings.superMode, false); startSession(); updateStats(); save(); fitDesktopWindow(); if (stateLoadStatus.blocked) setTimeout(() => toast("数据文件读取失败，原文件未被覆盖，请检查备份"), 400); else if (state.settings.reminder && dueWords().length) setTimeout(() => toast(`今天有 ${dueWords().length} 个词待复习`), 500);
+  document.querySelector(".app-shell").style.opacity = state.settings.opacity; bind(); applySuperMode(state.settings.superMode, false); startSession(); updateStats(); save({ backup: false }); appStarting = false; fitDesktopWindow(); if (stateLoadStatus.blocked) setTimeout(() => toast("数据文件读取失败，原文件未被覆盖，请检查备份"), 400); else if (state.settings.reminder && dueWords().length) setTimeout(() => toast(`今天有 ${dueWords().length} 个词待复习`), 500);
 })();

@@ -55,7 +55,7 @@ async function writeFileSafely(targetPath, temporaryPath, serialized) {
   }
 }
 
-function queuePersistedState(state) {
+function queuePersistedState(state, { backup = true } = {}) {
   if (!state || typeof state !== "object") return;
   stateWriteQueue = stateWriteQueue
     .catch(() => {})
@@ -63,7 +63,7 @@ function queuePersistedState(state) {
       const timestamp = new Date().toISOString();
       const serialized = JSON.stringify({ ...state, savedAt: timestamp, exportedAt: timestamp }, null, 2);
       await writeFileSafely(statePath, stateTempPath, serialized);
-      await writeFileSafely(backupPath, backupTempPath, serialized);
+      if (backup) await writeFileSafely(backupPath, backupTempPath, serialized);
     })
     .catch((error) => console.error("自动备份失败:", error.message));
 }
@@ -170,6 +170,12 @@ ipcMain.on("fuci:save-state", (_event, payload) => {
   let state;
   try { state = typeof payload === "string" ? JSON.parse(payload) : payload; } catch { return; }
   queuePersistedState(state);
+});
+
+ipcMain.on("fuci:save-state-only", (_event, payload) => {
+  let state;
+  try { state = typeof payload === "string" ? JSON.parse(payload) : payload; } catch { return; }
+  queuePersistedState(state, { backup: false });
 });
 
 ipcMain.on("fuci:fit-window", (_event, requested) => {
