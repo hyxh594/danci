@@ -122,6 +122,7 @@ function createWindow() {
     alwaysOnTop: true,
     show: true,
     backgroundColor: "#f6f7fb",
+    icon: path.join(__dirname, "assets", "fuci-icon.png"),
     preload: preloadPath,
     // This is a local file-only desktop app. Keep the preload bridge on the
     // page's world so the persistence API is available across Electron 44
@@ -245,7 +246,8 @@ if (!gotSingleInstanceLock) {
     // it. That used to create a startup race where the renderer saw partial
     // JSON and immediately replaced valid progress with a fresh state.
     createWindow();
-    const trayIcon = nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+    const traySource = nativeImage.createFromPath(path.join(__dirname, "assets", "fuci-icon.png"));
+    const trayIcon = traySource.isEmpty() ? nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=") : traySource.resize({ width: 16, height: 16 });
     tray = new Tray(trayIcon);
     tray.setToolTip("浮词 · CET-6 背词器");
     tray.setContextMenu(Menu.buildFromTemplate([

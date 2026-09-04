@@ -37,6 +37,43 @@
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const progressFor = (id) => state.progress[id] || { status: "new", interval: 0, ease: 2.3, streak: 0, reviewCount: 0, successCount: 0, failCount: 0, nextReviewAt: 0, lastResult: "" };
   const meaningFor = (word) => CET6_MEANING_EXPANSIONS[word?.word?.toLowerCase()] || word?.meaning || "暂无释义，请在词库中补充";
+  const phoneticFor = (word) => {
+    const value = word?.phonetic || word?.ipa || word?.pronunciation || "";
+    return typeof value === "string" ? value.trim() : "";
+  };
+  function stopSpeaking() {
+    try { window.speechSynthesis?.cancel?.(); } catch {}
+    const button = $("#speak-btn");
+    button?.classList.remove("speaking");
+    button?.removeAttribute("aria-busy");
+  }
+  function speakWord() {
+    if (!currentWord) return;
+    const synth = window.speechSynthesis;
+    const button = $("#speak-btn");
+    if (!synth || typeof window.SpeechSynthesisUtterance !== "function") {
+      toast("当前系统没有可用的英语朗读引擎");
+      return;
+    }
+    if (button?.classList.contains("speaking")) { stopSpeaking(); return; }
+    stopSpeaking();
+    const utterance = new window.SpeechSynthesisUtterance(String(currentWord.word));
+    utterance.lang = "en-US";
+    utterance.rate = 0.82;
+    utterance.pitch = 1;
+    try {
+      const voice = synth.getVoices?.().find((item) => /^en([-_]|$)/i.test(item.lang));
+      if (voice) utterance.voice = voice;
+    } catch {}
+    const reset = () => {
+      button?.classList.remove("speaking");
+      button?.removeAttribute("aria-busy");
+    };
+    utterance.onstart = () => { button?.classList.add("speaking"); button?.setAttribute("aria-busy", "true"); };
+    utterance.onend = reset;
+    utterance.onerror = reset;
+    try { synth.speak(utterance); } catch { reset(); toast("朗读启动失败，请检查系统语音设置"); }
+  }
   const save = () => {
     if (stateLoadStatus.blocked) {
       $("#save-indicator").textContent = "未保存：数据文件异常";
@@ -196,14 +233,19 @@
     next.disabled = !currentWord || queuePosition >= queue.length - 1;
   }
   function renderCard() {
+    stopSpeaking();
     const total = queue.length;
     $("#progress-label").textContent = total ? `${Math.min(queuePosition + 1, total)} / ${total}` : "0 / 0";
     $("#progress-bar").style.width = total ? `${Math.min((queuePosition / total) * 100, 100)}%` : "0%";
-    if (!currentWord) { $("#review-title").textContent = "今天完成了"; $("#word-main").textContent = "太棒了"; $("#word-phonetic").textContent = "暂时没有待复习的词"; $("#word-answer").textContent = "去词库添加新词，或者明天再来看看。"; $("#word-answer").classList.add("visible"); $("#reveal-btn").disabled = true; $("#forgot-btn").disabled = true; $("#remember-btn").disabled = true; $("#skip-btn").disabled = true; updateWordNav(); return; }
+    if (!currentWord) { $("#review-title").textContent = "今天完成了"; $("#word-main").textContent = "太棒了"; $("#word-phonetic").textContent = "暂时没有待复习的词"; $("#word-answer").textContent = "去词库添加新词，或者明天再来看看。"; $("#word-answer").classList.add("visible"); $("#reveal-btn").disabled = true; $("#forgot-btn").disabled = true; $("#remember-btn").disabled = true; $("#skip-btn").disabled = true; $("#speak-btn").disabled = true; updateWordNav(); return; }
     const p = progressFor(currentWord.id);
     $("#review-title").textContent = p.status === "new" ? "认识新词" : "巩固记忆";
     $("#word-main").textContent = currentWord.word;
-    $("#word-phonetic").textContent = "CET-6 核心词 · 先回忆，再揭晓";
+    const phonetic = phoneticFor(currentWord);
+    $("#word-phonetic").textContent = phonetic ? `${phonetic.startsWith("/") ? phonetic : `/${phonetic}/`} · 点击朗读` : "点击扬声器朗读 · R";
+    $("#speak-btn").disabled = false;
+    $("#speak-btn").title = `朗读 ${currentWord.word}（R）`;
+    $("#speak-btn").setAttribute("aria-label", `朗读 ${currentWord.word}`);
     $("#word-level").textContent = currentWord.level || "CET6 CORE";
     $("#word-status").textContent = statusLabel(p.status);
     $("#word-answer").textContent = meaningFor(currentWord);
@@ -255,7 +297,7 @@
   function hasStoredSuperSize() { const size = state.settings.superSize; return Number(size?.width) >= 220 && Number(size?.height) >= 176; }
   function fitDesktopWindow() { if (!state.settings.superMode || hasStoredSuperSize() || !window.fuciDesktop?.fitToContent) return; clearTimeout(fitTimer); fitTimer = setTimeout(() => { const card = $("#word-card"); if (!card) return; const rect = card.getBoundingClientRect(); window.fuciDesktop.fitToContent(Math.max(220, Math.ceil(rect.width)), Math.max(176, Math.ceil(card.scrollHeight || rect.height))); }, 90); }
   function applySuperMode(enabled, persist = true) { state.settings.superMode = Boolean(enabled); document.body.classList.toggle("super-float", state.settings.superMode); arrangeSuperLayout(state.settings.superMode); $("#super-mode").checked = state.settings.superMode; const toggle = $("#super-toggle-btn"); toggle.classList.toggle("active", state.settings.superMode); toggle.title = state.settings.superMode ? "退出超级悬浮模式" : "进入超级悬浮模式"; toggle.setAttribute("aria-label", toggle.title); if (state.settings.superMode) switchView("review"); if (window.fuciDesktop?.setSuperMode) window.fuciDesktop.setSuperMode(state.settings.superMode, state.settings.superSize); fitDesktopWindow(); if (persist) save(); }
-  function addWord(word, meaning) { const clean = word.trim().toLowerCase(); if (!clean || state.words.some((w) => w.word === clean)) return false; state.words.unshift({ id: `custom-${clean}-${Date.now()}`, word: clean, meaning: meaning.trim(), level: "自定义", source: "用户添加", createdAt: now() }); save(); updateStats(); return true; }
+  function addWord(word, meaning, phonetic = "") { const clean = word.trim().toLowerCase(); if (!clean || state.words.some((w) => w.word === clean)) return false; const entry = { id: `custom-${clean}-${Date.now()}`, word: clean, meaning: meaning.trim(), level: "自定义", source: "用户添加", createdAt: now() }; const cleanPhonetic = String(phonetic || "").trim(); if (cleanPhonetic) entry.phonetic = cleanPhonetic; state.words.unshift(entry); save(); updateStats(); return true; }
   function importText(text, fileName) {
     let parsed;
     let imported = [];
@@ -286,16 +328,16 @@
         imported = Array.isArray(parsed) ? parsed : parsed.words || [];
       } else imported = text.split(/\r?\n/).map((line) => { const parts = line.split(/[,\t|]/); return { word: parts[0], meaning: parts.slice(1).join("，") }; });
     } catch { toast("文件格式无法识别"); return; }
-    let count = 0; imported.forEach((item) => { const word = item.word || item.term || item.单词; const meaning = item.meaning || item.translation || item.释义 || ""; if (word && addWord(String(word), String(meaning))) count += 1; }); toast(`已导入 ${count} 个新词`); updateStats();
+    let count = 0; imported.forEach((item) => { const word = item.word || item.term || item.单词; const meaning = item.meaning || item.translation || item.释义 || ""; const phonetic = item.phonetic || item.ipa || item.pronunciation || item.音标 || ""; if (word && addWord(String(word), String(meaning), String(phonetic))) count += 1; }); toast(`已导入 ${count} 个新词`); updateStats();
   }
   function exportBackup() { const blob = new Blob([JSON.stringify({ ...state, exportedAt: new Date().toISOString() }, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `fuci-cet6-backup-${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(a.href); toast("备份已导出"); }
   function bind() {
     $$(".nav-btn").forEach((b) => b.addEventListener("click", () => switchView(b.dataset.target)));
-    $("#reveal-btn").addEventListener("click", reveal); $("#remember-btn").addEventListener("click", () => review("remembered")); $("#forgot-btn").addEventListener("click", () => review("forgotten")); $("#skip-btn").addEventListener("click", skip);
+    $("#reveal-btn").addEventListener("click", reveal); $("#speak-btn").addEventListener("click", speakWord); $("#remember-btn").addEventListener("click", () => review("remembered")); $("#forgot-btn").addEventListener("click", () => review("forgotten")); $("#skip-btn").addEventListener("click", skip);
     $("#prev-btn").addEventListener("click", () => navigateWord(-1)); $("#next-btn").addEventListener("click", () => navigateWord(1));
     $$("[data-detail]").forEach((button) => button.addEventListener("click", () => openDetail(button.dataset.detail)));
     $("#detail-close").addEventListener("click", closeDetail); $("#detail-modal").addEventListener("click", (event) => { if (event.target.id === "detail-modal") closeDetail(); });
-    document.addEventListener("keydown", (event) => { if (event.target.matches("input")) return; if (event.code === "Space") { event.preventDefault(); reveal(); } if (event.key === "1") review("forgotten"); if (event.key === "2") review("remembered"); });
+    document.addEventListener("keydown", (event) => { if (event.target.matches("input, textarea, select, [contenteditable='true']")) return; if (event.key.toLowerCase() === "r") { event.preventDefault(); speakWord(); } if (event.code === "Space") { event.preventDefault(); reveal(); } if (event.key === "1") review("forgotten"); if (event.key === "2") review("remembered"); });
     $("#search-input").addEventListener("input", renderTable); $("#export-btn").addEventListener("click", exportBackup); $("#import-btn").addEventListener("click", () => $("#import-file").click()); $("#restore-btn").addEventListener("click", () => $("#import-file").click()); $("#import-file").addEventListener("change", (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => importText(String(reader.result), file.name.toLowerCase()); reader.readAsText(file); e.target.value = ""; });
     $("#add-word-btn").addEventListener("click", () => $("#add-modal").classList.remove("hidden")); [$("#close-modal"), $("#cancel-add")].forEach((b) => b.addEventListener("click", () => $("#add-modal").classList.add("hidden"))); $("#confirm-add").addEventListener("click", () => { const ok = addWord($("#new-word").value, $("#new-meaning").value); if (!ok) return toast("请输入新单词，或该词已存在"); $("#new-word").value = ""; $("#new-meaning").value = ""; $("#add-modal").classList.add("hidden"); toast("单词已加入词库"); });
     $("#daily-new").value = state.settings.dailyNew; $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; $("#super-mode").checked = Boolean(state.settings.superMode); $("#reminder").checked = state.settings.reminder; $("#daily-new").addEventListener("change", (e) => { state.settings.dailyNew = Math.max(1, Math.min(100, Number(e.target.value) || 20)); save(); startSession(); updateStats(); }); const updateOpacity = (e) => { state.settings.opacity = Number(e.target.value); $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; document.querySelector(".app-shell").style.opacity = state.settings.opacity; save(); }; $("#opacity-range").addEventListener("input", updateOpacity); $("#quick-opacity").addEventListener("input", updateOpacity); $("#super-mode").addEventListener("change", (e) => applySuperMode(e.target.checked)); $("#super-toggle-btn").addEventListener("click", () => applySuperMode(!state.settings.superMode)); $("#minimize-btn").addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (window.fuciDesktop?.hideWindow) window.fuciDesktop.hideWindow(); }); window.fuciDesktop?.onWindowResized?.((size) => { if (!state.settings.superMode || !size) return; const width = Math.round(Number(size.width)); const height = Math.round(Number(size.height)); if (width < 220 || height < 176) return; state.settings.superSize = { width, height }; save(); }); $("#reminder").addEventListener("change", (e) => { state.settings.reminder = e.target.checked; save(); });

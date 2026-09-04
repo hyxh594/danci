@@ -40,8 +40,11 @@
             <button id="prev-btn" class="word-nav word-nav-prev" type="button" aria-label="上一个单词" title="上一个单词">‹</button>
             <button id="next-btn" class="word-nav word-nav-next" type="button" aria-label="下一个单词" title="下一个单词">›</button>
             <div class="word-meta"><span id="word-level">CET-6 CORE</span><span id="word-status">新词</span></div>
-            <div class="word-main" id="word-main">点击开始</div>
-            <div class="phonetic" id="word-phonetic">轻量、离线、随时复习</div>
+            <div class="word-title-row">
+              <div class="word-main" id="word-main">点击开始</div>
+              <button id="speak-btn" class="speak-btn" type="button" title="朗读单词（R）" aria-label="朗读单词" disabled>🔊</button>
+            </div>
+            <div class="phonetic" id="word-phonetic">点击扬声器朗读 · R</div>
             <div class="answer" id="word-answer">答案会在这里出现</div>
             <button id="reveal-btn" class="reveal-btn">显示释义 <span>Space</span></button>
             <div class="review-actions">
@@ -50,7 +53,7 @@
             </div>
             <button id="skip-btn" class="skip-btn">跳过这个词</button>
           </article>
-          <div class="tip-row"><span>建议先回忆，再显示释义</span><span>快捷键：Space 显示 · 1 忘记 · 2 记住</span></div>
+          <div class="tip-row"><span>建议先回忆，再显示释义</span><span>快捷键：R 朗读 · Space 显示 · 1 忘记 · 2 记住</span></div>
         </div>
 
         <div class="view" data-view="library">

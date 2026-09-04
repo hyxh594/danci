@@ -37,6 +37,57 @@ textarea,
   display: none !important;
 }
 
+/* Keep the word and its reader control together so the pronunciation action
+   stays discoverable without making the card taller. */
+.word-title-row {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin-top: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.word-title-row .word-main {
+  margin-top: 0;
+  max-width: calc(100% - 36px);
+}
+
+.speak-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(220, 225, 247, .95);
+  border-radius: 10px;
+  background: rgba(246, 247, 255, .92);
+  color: var(--accent);
+  font-size: 15px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 5px 12px rgba(99, 102, 241, .1);
+  transition: transform .15s, background .15s, box-shadow .15s;
+}
+
+.speak-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+
+.speak-btn.speaking {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(99, 102, 241, .24);
+}
+
+.speak-btn:disabled {
+  cursor: default;
+  opacity: .35;
+}
+
 .mode-btn.active {
   color: var(--accent);
   background: var(--accent-soft);
@@ -162,8 +213,7 @@ body.super-float .word-meta span:last-child {
 
 body.super-float .word-main {
   flex: none;
-  max-width: 100%;
-  margin-top: 38px;
+  max-width: calc(100% - 36px);
   font-size: clamp(27px, 8vw, 40px);
   line-height: 1.05;
   overflow-wrap: anywhere;
@@ -171,7 +221,23 @@ body.super-float .word-main {
 }
 
 body.super-float .phonetic {
-  display: none;
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+body.super-float .word-title-row {
+  margin-top: 38px;
+  gap: 6px;
+}
+
+body.super-float .speak-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  font-size: 13px;
 }
 
 body.super-float .answer {

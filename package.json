@@ -24,6 +24,7 @@
       "electron-main.cjs",
       "electron-preload.cjs",
       "desktop-launcher.cjs",
+      "assets/**/*",
       "data/**/*",
       "!fuci-cet6-state.json",
       "!fuci-cet6-backup-*.json",
@@ -31,7 +32,8 @@
     ],
     "win": {
       "target": ["portable"],
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico",
+      "signExecutable": false
     }
   },
   "devDependencies": {
