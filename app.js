@@ -24,7 +24,7 @@
   const DAY = 86400000;
   const TEN_MINUTES = 600000;
   const cloneSeed = () => CET6_CORE_WORDS.map((word) => ({ ...word, createdAt: now() }));
-  const initialState = () => ({ version: 4, words: cloneSeed(), progress: {}, history: [], settings: { dailyNew: 20, opacity: 1, autoNext: true, reminder: true, superMode: true, superSize: null, dailyNewBatch: null } });
+  const initialState = () => ({ version: 4, words: cloneSeed(), progress: {}, history: [], settings: { dailyNew: 20, opacity: 1, autoNext: true, reminder: true, superMode: true, superSize: null, superSizeManual: false, dailyNewBatch: null, exampleMode: true } });
   let stateLoadStatus = { persisted: false, blocked: false };
   let state = loadState();
   let queue = [];
@@ -33,14 +33,19 @@
   let revealed = false;
   let saveTimer;
   let fitTimer;
+  let autoFitTarget = null;
+  let autoFitClearTimer;
   let appStarting = true;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const progressFor = (id) => state.progress[id] || { status: "new", interval: 0, ease: 2.3, streak: 0, reviewCount: 0, successCount: 0, failCount: 0, nextReviewAt: 0, lastResult: "" };
   const meaningFor = (word) => CET6_MEANING_EXPANSIONS[word?.word?.toLowerCase()] || word?.meaning || "暂无释义，请在词库中补充";
+  const exampleEntries = typeof CET6_EXAMPLE_WORDS === "undefined" ? [] : CET6_EXAMPLE_WORDS;
+  const exampleByWord = new Map(exampleEntries.map((entry) => [String(entry.word || "").toLowerCase(), entry]));
+  const exampleFor = (word) => exampleByWord.get(String(word?.word || "").toLowerCase()) || null;
   const phoneticFor = (word) => {
-    const value = word?.phonetic || word?.ipa || word?.pronunciation || "";
+    const value = word?.phonetic || word?.ipa || word?.pronunciation || exampleFor(word)?.phonetic || "";
     return typeof value === "string" ? value.trim() : "";
   };
   function stopSpeaking() {
@@ -101,6 +106,10 @@
         const fresh = initialState();
         const migrated = { ...fresh, ...saved, version: 4, words: saved.words, progress: saved.progress || {}, history: saved.history || [], settings: { ...fresh.settings, ...(saved.settings || {}) } };
         if (migrated.settings.superSize && (Number(migrated.settings.superSize.width) < 220 || Number(migrated.settings.superSize.height) < 176)) migrated.settings.superSize = null;
+        // Older versions did not distinguish a user resize from an automatic
+        // fit. Treat their saved size as auto-sized so an expanded card does
+        // not leave a tall blank window after the next launch.
+        if (typeof migrated.settings.superSizeManual !== "boolean") migrated.settings.superSizeManual = false;
         if (!migrated.settings.dailyNewBatch || typeof migrated.settings.dailyNewBatch !== "object") migrated.settings.dailyNewBatch = null;
         // Super mode is the launch default. Leaving it off is a temporary
         // session choice; the next launch intentionally returns to the card.
@@ -240,7 +249,7 @@
     const total = queue.length;
     $("#progress-label").textContent = total ? `${Math.min(queuePosition + 1, total)} / ${total}` : "0 / 0";
     $("#progress-bar").style.width = total ? `${Math.min((queuePosition / total) * 100, 100)}%` : "0%";
-    if (!currentWord) { $("#review-title").textContent = "今天完成了"; $("#word-main").textContent = "太棒了"; $("#word-phonetic").textContent = "暂时没有待复习的词"; $("#word-answer").textContent = "去词库添加新词，或者明天再来看看。"; $("#word-answer").classList.add("visible"); $("#reveal-btn").disabled = true; $("#forgot-btn").disabled = true; $("#remember-btn").disabled = true; $("#skip-btn").disabled = true; $("#speak-btn").disabled = true; updateWordNav(); return; }
+    if (!currentWord) { $("#review-title").textContent = "今天完成了"; $("#word-main").textContent = "太棒了"; $("#word-phonetic").textContent = "暂时没有待复习的词"; $("#word-answer").textContent = "去词库添加新词，或者明天再来看看。"; $("#word-answer").classList.add("visible"); $("#word-example").hidden = true; $("#example-sentence").textContent = ""; $("#example-translation").textContent = ""; $("#reveal-btn").disabled = true; $("#forgot-btn").disabled = true; $("#remember-btn").disabled = true; $("#skip-btn").disabled = true; $("#speak-btn").disabled = true; updateWordNav(); fitDesktopWindow({ compact: true }); return; }
     const p = progressFor(currentWord.id);
     $("#review-title").textContent = p.status === "new" ? "认识新词" : "巩固记忆";
     $("#word-main").textContent = currentWord.word;
@@ -253,11 +262,19 @@
     $("#word-status").textContent = statusLabel(p.status);
     $("#word-answer").textContent = meaningFor(currentWord);
     $("#word-answer").classList.toggle("visible", revealed);
+    const example = exampleFor(currentWord);
+    $("#example-sentence").textContent = example?.sentence || "";
+    $("#example-translation").textContent = example?.sentenceTranslation ? `译：${example.sentenceTranslation}` : "";
+    $("#word-example").hidden = !state.settings.exampleMode || !revealed || !example?.sentence;
     $("#reveal-btn").textContent = revealed ? "已显示释义" : "显示释义 ";
     if (!revealed) { const hint = document.createElement("span"); hint.textContent = "Space"; $("#reveal-btn").appendChild(hint); }
     $("#reveal-btn").disabled = revealed;
     $("#forgot-btn").disabled = !revealed; $("#remember-btn").disabled = !revealed; $("#skip-btn").disabled = false;
     updateWordNav();
+    // The bilingual example can add a few lines in the compact card. Let the
+    // desktop window accommodate it on first use while respecting a size the
+    // user has already chosen manually.
+    fitDesktopWindow({ compact: !revealed });
   }
   function statusLabel(status) { return status === "mastered" ? "已掌握" : status === "learning" ? "学习中" : "新词"; }
   function reveal() { if (!currentWord || revealed) return; revealed = true; renderCard(); }
@@ -298,7 +315,7 @@
   function switchView(name) { $$(".view").forEach((v) => v.classList.toggle("active", v.dataset.view === name)); $$(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.target === name)); if (name === "library") updateStats(); }
   function arrangeSuperLayout(enabled) { const card = $("#word-card"); const topbar = document.querySelector(".topbar"); const toolbar = document.querySelector(".review-toolbar"); const actions = document.querySelector(".top-actions"); const progress = document.querySelector(".progress-wrap"); if (!card || !topbar || !toolbar || !actions || !progress) return; if (enabled) { if (!card.contains(actions)) card.appendChild(actions); if (!card.contains(progress)) card.appendChild(progress); } else { if (!topbar.contains(actions)) topbar.appendChild(actions); if (!toolbar.contains(progress)) toolbar.appendChild(progress); } }
   function hasStoredSuperSize() { const size = state.settings.superSize; return Number(size?.width) >= 220 && Number(size?.height) >= 176; }
-  function fitDesktopWindow() { if (!state.settings.superMode || hasStoredSuperSize() || !window.fuciDesktop?.fitToContent) return; clearTimeout(fitTimer); fitTimer = setTimeout(() => { const card = $("#word-card"); if (!card) return; const rect = card.getBoundingClientRect(); window.fuciDesktop.fitToContent(Math.max(220, Math.ceil(rect.width)), Math.max(176, Math.ceil(card.scrollHeight || rect.height))); }, 90); }
+  function fitDesktopWindow({ compact = false } = {}) { if (!state.settings.superMode || !window.fuciDesktop?.fitToContent) return; clearTimeout(fitTimer); fitTimer = setTimeout(() => { const card = $("#word-card"); if (!card) return; const rect = card.getBoundingClientRect(); const width = Math.max(220, Math.ceil(rect.width)); const neededHeight = Math.max(176, Math.ceil(card.scrollHeight || rect.height)); const currentHeight = Math.ceil(window.innerHeight || 0); const autoCompact = compact && !state.settings.superSizeManual; if (hasStoredSuperSize() && neededHeight <= currentHeight + 4 && !autoCompact) return; if (autoCompact) { state.settings.superSize = { width, height: neededHeight }; autoFitTarget = { width, height: neededHeight }; clearTimeout(autoFitClearTimer); autoFitClearTimer = setTimeout(() => { autoFitTarget = null; }, 1000); } window.fuciDesktop.fitToContent(width, neededHeight); if (autoCompact && !appStarting) save({ backup: false }); }, 90); }
   function applySuperMode(enabled, persist = true) { state.settings.superMode = Boolean(enabled); document.body.classList.toggle("super-float", state.settings.superMode); arrangeSuperLayout(state.settings.superMode); $("#super-mode").checked = state.settings.superMode; const toggle = $("#super-toggle-btn"); toggle.classList.toggle("active", state.settings.superMode); toggle.title = state.settings.superMode ? "退出超级悬浮模式" : "进入超级悬浮模式"; toggle.setAttribute("aria-label", toggle.title); if (state.settings.superMode) switchView("review"); if (window.fuciDesktop?.setSuperMode) window.fuciDesktop.setSuperMode(state.settings.superMode, state.settings.superSize); fitDesktopWindow(); if (persist) save(); }
   function addWord(word, meaning, phonetic = "") { const clean = word.trim().toLowerCase(); if (!clean || state.words.some((w) => w.word === clean)) return false; const entry = { id: `custom-${clean}-${Date.now()}`, word: clean, meaning: meaning.trim(), level: "自定义", source: "用户添加", createdAt: now() }; const cleanPhonetic = String(phonetic || "").trim(); if (cleanPhonetic) entry.phonetic = cleanPhonetic; state.words.unshift(entry); save(); updateStats(); return true; }
   function importText(text, fileName) {
@@ -320,6 +337,7 @@
             settings: { ...fresh.settings, ...(parsed.settings || {}) }
           };
           state.settings.superMode = true;
+          if (typeof state.settings.superSizeManual !== "boolean") state.settings.superSizeManual = false;
           if (state.settings.superSize && (Number(state.settings.superSize.width) < 220 || Number(state.settings.superSize.height) < 176)) state.settings.superSize = null;
           save();
           applySuperMode(true, false);
@@ -343,7 +361,7 @@
     document.addEventListener("keydown", (event) => { if (event.target.matches("input, textarea, select, [contenteditable='true']")) return; if (event.key.toLowerCase() === "r") { event.preventDefault(); speakWord(); } if (event.code === "Space") { event.preventDefault(); reveal(); } if (event.key === "1") review("forgotten"); if (event.key === "2") review("remembered"); });
     $("#search-input").addEventListener("input", renderTable); $("#export-btn").addEventListener("click", exportBackup); $("#import-btn").addEventListener("click", () => $("#import-file").click()); $("#restore-btn").addEventListener("click", () => $("#import-file").click()); $("#import-file").addEventListener("change", (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => importText(String(reader.result), file.name.toLowerCase()); reader.readAsText(file); e.target.value = ""; });
     $("#add-word-btn").addEventListener("click", () => $("#add-modal").classList.remove("hidden")); [$("#close-modal"), $("#cancel-add")].forEach((b) => b.addEventListener("click", () => $("#add-modal").classList.add("hidden"))); $("#confirm-add").addEventListener("click", () => { const ok = addWord($("#new-word").value, $("#new-meaning").value); if (!ok) return toast("请输入新单词，或该词已存在"); $("#new-word").value = ""; $("#new-meaning").value = ""; $("#add-modal").classList.add("hidden"); toast("单词已加入词库"); });
-    $("#daily-new").value = state.settings.dailyNew; $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; $("#super-mode").checked = Boolean(state.settings.superMode); $("#reminder").checked = state.settings.reminder; $("#daily-new").addEventListener("change", (e) => { state.settings.dailyNew = Math.max(1, Math.min(100, Number(e.target.value) || 20)); save(); startSession(); updateStats(); }); const updateOpacity = (e) => { state.settings.opacity = Number(e.target.value); $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; document.querySelector(".app-shell").style.opacity = state.settings.opacity; save(); }; $("#opacity-range").addEventListener("input", updateOpacity); $("#quick-opacity").addEventListener("input", updateOpacity); $("#super-mode").addEventListener("change", (e) => applySuperMode(e.target.checked)); $("#super-toggle-btn").addEventListener("click", () => applySuperMode(!state.settings.superMode)); $("#minimize-btn").addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (window.fuciDesktop?.hideWindow) window.fuciDesktop.hideWindow(); }); window.fuciDesktop?.onWindowResized?.((size) => { if (!state.settings.superMode || !size) return; const width = Math.round(Number(size.width)); const height = Math.round(Number(size.height)); if (width < 220 || height < 176) return; state.settings.superSize = { width, height }; save(); }); $("#reminder").addEventListener("change", (e) => { state.settings.reminder = e.target.checked; save(); });
+    $("#daily-new").value = state.settings.dailyNew; $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; $("#super-mode").checked = Boolean(state.settings.superMode); $("#example-mode").checked = state.settings.exampleMode !== false; $("#reminder").checked = state.settings.reminder; $("#daily-new").addEventListener("change", (e) => { state.settings.dailyNew = Math.max(1, Math.min(100, Number(e.target.value) || 20)); save(); startSession(); updateStats(); }); const updateOpacity = (e) => { state.settings.opacity = Number(e.target.value); $("#opacity-range").value = state.settings.opacity; $("#quick-opacity").value = state.settings.opacity; document.querySelector(".app-shell").style.opacity = state.settings.opacity; save(); }; $("#opacity-range").addEventListener("input", updateOpacity); $("#quick-opacity").addEventListener("input", updateOpacity); $("#super-mode").addEventListener("change", (e) => applySuperMode(e.target.checked)); $("#super-toggle-btn").addEventListener("click", () => applySuperMode(!state.settings.superMode)); $("#minimize-btn").addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (window.fuciDesktop?.hideWindow) window.fuciDesktop.hideWindow(); }); window.fuciDesktop?.onWindowResized?.((size) => { if (!state.settings.superMode || !size) return; const width = Math.round(Number(size.width)); const height = Math.round(Number(size.height)); if (width < 220 || height < 176) return; const autoFit = autoFitTarget && Math.abs(width - autoFitTarget.width) <= 3 && Math.abs(height - autoFitTarget.height) <= 3; if (autoFit) autoFitTarget = null; else { state.settings.superSize = { width, height }; state.settings.superSizeManual = true; save(); } }); $("#example-mode").addEventListener("change", (e) => { state.settings.exampleMode = e.target.checked; save(); renderCard(); }); $("#reminder").addEventListener("change", (e) => { state.settings.reminder = e.target.checked; save(); });
     $$(".resize-handle").forEach((handle) => handle.addEventListener("mousedown", (event) => { if (!window.fuciDesktop?.resizeStart) return; event.preventDefault(); const edge = handle.dataset.edge; window.fuciDesktop.resizeStart(edge, event.screenX, event.screenY); const move = (e) => window.fuciDesktop.resizeMove(e.screenX, e.screenY); const end = () => { window.fuciDesktop.resizeEnd(); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", end); }; window.addEventListener("mousemove", move); window.addEventListener("mouseup", end, { once: true }); }));
   }
   document.querySelector(".app-shell").style.opacity = state.settings.opacity; bind(); applySuperMode(state.settings.superMode, false); startSession(); updateStats(); save({ backup: false }); appStarting = false; fitDesktopWindow(); if (stateLoadStatus.blocked) setTimeout(() => toast("数据文件读取失败，原文件未被覆盖，请检查备份"), 400); else if (state.settings.reminder && dueWords().length) setTimeout(() => toast(`今天有 ${dueWords().length} 个词待复习`), 500);
