@@ -260,6 +260,34 @@ body.super-float .answer.visible {
   padding: 5px 7px;
 }
 
+.today-words-title {
+  margin-bottom: 4px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.today-words-list {
+  max-height: 150px;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.today-word-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-top: 1px solid rgba(224, 227, 242, .75);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.today-word-row span {
+  color: var(--muted);
+  text-align: right;
+}
+
 /* Before the meaning is revealed there is no reason to reserve an invisible
    answer panel. Collapse it completely so the reveal control sits directly
    below the pronunciation line instead of floating over an empty gap. */
